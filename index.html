@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Exchange</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0a0a1a;
+            --bg-card: #12122a;
+            --neon-cyan: #00f3ff;
+            --neon-magenta: #ff00ff;
+            --neon-green: #00ff9d;
+            --neon-red: #ff0055;
+            --text-primary: #e0e0ff;
+            --text-secondary: #8888aa;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { background: var(--bg-dark); color: var(--text-primary); min-height: 100vh; overflow-x: hidden; position: relative; }
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 20% 30%, rgba(0, 243, 255, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(255, 0, 255, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 50% 50%, rgba(0, 255, 157, 0.05) 0%, transparent 70%);
+            z-index: -1; pointer-events: none;
+        }
+        .app-container { padding: 16px; max-width: 600px; margin: 0 auto; }
+        .top-bar {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+            padding: 12px 16px; background: var(--bg-card); border-radius: 12px;
+            border: 1px solid rgba(0, 243, 255, 0.2); box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+        }
+        .current-date { font-size: 14px; color: var(--neon-cyan); text-shadow: 0 0 8px rgba(0, 243, 255, 0.6); font-weight: 500; }
+        .app-title {
+            font-size: 16px; font-weight: 700;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .country-selector {
+            width: 100%; padding: 14px 18px; margin-bottom: 16px; background: var(--bg-card);
+            border: 1px solid rgba(255, 0, 255, 0.3); border-radius: 12px; color: var(--text-primary);
+            font-size: 16px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between;
+            align-items: center; transition: all 0.3s ease; box-shadow: 0 0 12px rgba(255, 0, 255, 0.1);
+            position: relative; overflow: hidden;
+        }
+        .country-selector:active { transform: scale(0.98); box-shadow: 0 0 20px rgba(255, 0, 255, 0.3); }
+        .country-selector::after { content: '▼'; font-size: 12px; color: var(--neon-magenta); transition: transform 0.3s; }
+        .country-selector.open::after { transform: rotate(180deg); }
+        .country-name { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0, 243, 255, 0.5); }
+        .country-list {
+            position: absolute; top: 100%; left: 0; width: 100%; max-height: 300px; overflow-y: auto;
+            background: #0d0d20; border: 1px solid rgba(0, 243, 255, 0.3); border-radius: 12px;
+            margin-top: 8px; z-index: 100; display: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 243, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        .country-list.show { display: block; animation: fadeIn 0.2s ease; }
+        .country-list::-webkit-scrollbar { width: 4px; }
+        .country-list::-webkit-scrollbar-thumb { background: var(--neon-cyan); border-radius: 4px; }
+        .country-item {
+            padding: 12px 18px; cursor: pointer; transition: all 0.2s; display: flex;
+            justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0, 243, 255, 0.1);
+        }
+        .country-item:last-child { border-bottom: none; }
+        .country-item:active { background: rgba(0, 243, 255, 0.1); }
+        .country-item:hover { background: rgba(255, 0, 255, 0.1); }
+        .country-flag { font-size: 20px; margin-right: 10px; }
+        .country-info { display: flex; align-items: center; flex: 1; }
+        .country-code { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; }
+        .country-currency { font-size: 12px; color: var(--neon-cyan); font-weight: 600; }
+        .pairs-container { display: flex; flex-direction: column; gap: 10px; }
+        .currency-pair {
+            background: var(--bg-card); border-radius: 14px; padding: 16px;
+            border: 1px solid rgba(0, 243, 255, 0.2); transition: all 0.3s ease;
+            position: relative; overflow: hidden; box-shadow: 0 0 10px rgba(0, 243, 255, 0.05);
+        }
+        .pair-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .pair-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
+        .pair-source { font-size: 9px; color: var(--text-secondary); opacity: 0.5; letter-spacing: 0.5px; }
+
+        .pair-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .currency-block { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+        .rate-label-small {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--text-secondary); margin-bottom: 4px; font-weight: 600;
+        }
+        .currency-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--neon-green); }
+        .currency-value { font-size: 20px; font-weight: 700; margin-top: 2px; letter-spacing: -0.5px; color: var(--neon-green); }
+        .currency-code-small { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; margin-top: 1px; }
+        .change-indicator {
+            display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+            padding: 3px 7px; border-radius: 6px; white-space: nowrap;
+            margin-top: 6px; width: fit-content;
+        }
+        .change-indicator.up { color: var(--neon-green); background: rgba(0, 255, 157, 0.1); text-shadow: 0 0 6px rgba(0, 255, 157, 0.5); }
+        .change-indicator.down { color: var(--neon-red); background: rgba(255, 0, 85, 0.1); text-shadow: 0 0 6px rgba(255, 0, 85, 0.5); }
+        .arrow { font-size: 12px; }
+        .divider { width: 1px; align-self: stretch; background: linear-gradient(to bottom, transparent, rgba(0, 243, 255, 0.4), transparent); margin: 0 4px; }
+        .loading { text-align: center; padding: 40px; color: var(--neon-cyan); font-size: 14px; }
+        .loading-spinner { width: 30px; height: 30px; border: 2px solid rgba(0, 243, 255, 0.2); border-top-color: var(--neon-cyan); border-radius: 50%; margin: 0 auto 12px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+        .converter {
+            margin-top: 14px; padding-top: 14px;
+            border-top: 1px solid rgba(0, 243, 255, 0.15);
+            display: flex; gap: 8px; align-items: center;
+        }
+        .converter input {
+            flex: 1; background: #0d0d20; border: 1px solid rgba(0, 243, 255, 0.3);
+            border-radius: 8px; padding: 8px 10px; color: var(--neon-cyan);
+            font-size: 14px; font-weight: 600; outline: none;
+            font-family: inherit; min-width: 0;
+        }
+        .converter input:focus { border-color: var(--neon-cyan); box-shadow: 0 0 8px rgba(0, 243, 255, 0.4); }
+        .converter input::placeholder { color: var(--text-secondary); }
+        .converter input::-webkit-outer-spin-button,
+        .converter input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .converter input[type=number] { -moz-appearance: textfield; }
+
+        .converter-mode {
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.2), rgba(0, 243, 255, 0.1));
+            border: 1px solid rgba(0, 243, 255, 0.5);
+            border-radius: 8px; padding: 8px 12px;
+            color: var(--neon-cyan); font-size: 12px; font-weight: 700;
+            cursor: pointer; white-space: nowrap;
+            font-family: inherit; letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 8px rgba(0, 243, 255, 0.2);
+            text-shadow: 0 0 6px rgba(0, 243, 255, 0.5);
+        }
+        .converter-mode.sell {
+            background: linear-gradient(135deg, rgba(255, 0, 255, 0.2), rgba(255, 0, 255, 0.1));
+            border-color: rgba(255, 0, 255, 0.5);
+            color: var(--neon-magenta);
+            box-shadow: 0 0 8px rgba(255, 0, 255, 0.2);
+            text-shadow: 0 0 6px rgba(255, 0, 255, 0.5);
+        }
+        .converter-mode:active { transform: scale(0.94); box-shadow: 0 0 15px rgba(0, 243, 255, 0.4); }
+        .converter-result {
+            flex: 1; background: #0d0d20; border: 1px solid rgba(255, 0, 255, 0.3);
+            border-radius: 8px; padding: 8px 10px; color: var(--neon-magenta);
+            font-size: 14px; font-weight: 600; text-align: right;
+            font-family: inherit; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; min-width: 0;
+        }
+        .converter-hint {
+            text-align: center; font-size: 10px; color: var(--text-secondary);
+            margin-top: 8px; opacity: 0.6; letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 400px) {
+            .app-container { padding: 12px; }
+            .currency-value { font-size: 17px; }
+            .currency-name { font-size: 12px; }
+            .change-indicator { font-size: 10px; padding: 2px 5px; }
+            .converter input, .converter-result { font-size: 12px; padding: 6px 8px; }
+            .converter-mode { font-size: 11px; padding: 6px 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="top-bar">
+            <span class="current-date" id="currentDate"></span>
+            <span class="app-title">Neon Exchange</span>
+        </div>
+
+        <div style="position: relative;">
+            <button class="country-selector" id="countrySelector">
+                <span>Страна: <span class="country-name" id="selectedCountryName">Россия</span></span>
+            </button>
+            <div class="country-list" id="countryList"></div>
+        </div>
+
+        <div class="pairs-container" id="pairsContainer">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                Загрузка курсов...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // 🔑 API КЛЮЧИ
+        // ============================================
+        const API_KEYS = {
+            EXCHANGERATE: 'ВАШ_КЛЮЧ_EXCHANGERATE',
+            ALLRATESTODAY: 'ВАШ_КЛЮЧ_ALLRATESTODAY'
+        };
+
+        // ============================================
+        // ДАННЫЕ
+        // ============================================
+
+        const COUNTRIES = [
+            { code: 'RU', name: 'Россия', flag: '🇷🇺', currency: 'RUB', baseCurrency: 'RUB' },
+            { code: 'UA', name: 'Украина', flag: '🇺🇦', currency: 'UAH', baseCurrency: 'UAH' },
+            { code: 'US', name: 'США', flag: '🇺🇸', currency: 'USD', baseCurrency: 'USD' },
+            { code: 'EU', name: 'Евросоюз', flag: '🇪🇺', currency: 'EUR', baseCurrency: 'EUR' },
+            { code: 'GB', name: 'Великобритания', flag: '🇬🇧', currency: 'GBP', baseCurrency: 'GBP' },
+            { code: 'JP', name: 'Япония', flag: '🇯🇵', currency: 'JPY', baseCurrency: 'JPY' },
+            { code: 'CH', name: 'Швейцария', flag: '🇨🇭', currency: 'CHF', baseCurrency: 'CHF' },
+            { code: 'CN', name: 'Китай', flag: '🇨🇳', currency: 'CNY', baseCurrency: 'CNY' },
+            { code: 'KZ', name: 'Казахстан', flag: '🇰🇿', currency: 'KZT', baseCurrency: 'KZT' },
+            { code: 'TR', name: 'Турция', flag: '🇹🇷', currency: 'TRY', baseCurrency: 'TRY' },
+            { code: 'IN', name: 'Индия', flag: '🇮🇳', currency: 'INR', baseCurrency: 'INR' },
+            { code: 'BR', name: 'Бразилия', flag: '🇧🇷', currency: 'BRL', baseCurrency: 'BRL' },
+            { code: 'CA', name: 'Канада', flag: '🇨🇦', currency: 'CAD', baseCurrency: 'CAD' },
+            { code: 'AU', name: 'Австралия', flag: '🇦🇺', currency: 'AUD', baseCurrency: 'AUD' },
+            { code: 'KR', name: 'Южная Корея', flag: '🇰🇷', currency: 'KRW', baseCurrency: 'KRW' },
+            { code: 'SG', name: 'Сингапур', flag: '🇸🇬', currency: 'SGD', baseCurrency: 'SGD' },
+            { code: 'NO', name: 'Норвегия', flag: '🇳🇴', currency: 'NOK', baseCurrency: 'NOK' },
+            { code: 'SE', name: 'Швеция', flag: '🇸🇪', currency: 'SEK', baseCurrency: 'SEK' },
+            { code: 'PL', name: 'Польша', flag: '🇵🇱', currency: 'PLN', baseCurrency: 'PLN' },
+            { code: 'ZA', name: 'ЮАР', flag: '🇿🇦', currency: 'ZAR', baseCurrency: 'ZAR' },
+            { code: 'MX', name: 'Мексика', flag: '🇲🇽', currency: 'MXN', baseCurrency: 'MXN' },
+        ];
+
+        const PAIR_CURRENCIES = {
+            'RUB': ['USD', 'EUR', 'CNY', 'UAH', 'GBP', 'JPY', 'CHF', 'KZT'],
+            'UAH': ['USD', 'EUR', 'RUB', 'GBP', 'PLN', 'CHF', 'CAD', 'JPY', 'CNY'],
+            'USD': ['EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF', 'CAD'],
+            'EUR': ['USD', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF', 'CAD'],
+            'GBP': ['USD', 'EUR', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF', 'CAD'],
+            'JPY': ['USD', 'EUR', 'GBP', 'RUB', 'UAH', 'CNY', 'CHF', 'CAD'],
+            'CHF': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CAD'],
+            'CNY': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CHF', 'CAD'],
+            'KZT': ['USD', 'EUR', 'RUB', 'UAH', 'CNY', 'TRY', 'GBP', 'JPY'],
+            'TRY': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'INR': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'BRL': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'CAD': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'AUD': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'KRW': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'SGD': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'NOK': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'SEK': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'PLN': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'ZAR': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+            'MXN': ['USD', 'EUR', 'GBP', 'JPY', 'RUB', 'UAH', 'CNY', 'CHF'],
+        };
+
+        const CURRENCY_NAMES = {
+            'USD': 'Доллар США', 'EUR': 'Евро', 'GBP': 'Фунт стерлингов',
+            'JPY': 'Японская йена', 'CHF': 'Швейцарский франк', 'CNY': 'Китайский юань',
+            'RUB': 'Российский рубль', 'UAH': 'Украинская гривна',
+            'KZT': 'Казахстанский тенге', 'TRY': 'Турецкая лира',
+            'INR': 'Индийская рупия', 'BRL': 'Бразильский реал', 'CAD': 'Канадский доллар',
+            'AUD': 'Австралийский доллар', 'KRW': 'Южнокорейская вона', 'SGD': 'Сингапурский доллар',
+            'NOK': 'Норвежская крона', 'SEK': 'Шведская крона', 'PLN': 'Польский злотый',
+            'ZAR': 'Южноафриканский рэнд', 'MXN': 'Мексиканское песо'
+        };
+
+        const USD_PER_UNIT = {
+            USD: 1,           EUR: 1.087,       GBP: 1.266,       JPY: 0.0067,
+            CHF: 1.136,       CNY: 0.138,       RUB: 0.0108,      UAH: 0.0241,
+            KZT: 0.0021,      TRY: 0.0295,      INR: 0.012,       BRL: 0.200,
+            CAD: 0.735,       AUD: 0.658,       KRW: 0.00074,     SGD: 0.745,
+            NOK: 0.092,       SEK: 0.095,       PLN: 0.252,       ZAR: 0.054,
+            MXN: 0.058
+        };
+
+        // ============================================
+        // СОСТОЯНИЕ
+        // ============================================
+
+        const state = {
+            selectedCountry: COUNTRIES[0],
+            rates: {},
+            pairRateTypes: {},
+            pairAmounts: {},
+        };
+
+        let currentRenderId = 0;
+
+        // ============================================
+        // УТИЛИТЫ
+        // ============================================
+
+        function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
+            return Promise.race([
+                fetch(url, options),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Timeout')), timeoutMs)
+                )
+            ]);
+        }
+
+        // ============================================
+        // КЭШ
+        // ============================================
+
+        const CACHE_VERSION = 7;
+        const CACHE_PREFIX = `neon_exchange_v${CACHE_VERSION}_`;
+        const CACHE_TTL = 10 * 60 * 1000;
+
+        function getCached(key) {
+            try {
+                const raw = localStorage.getItem(CACHE_PREFIX + key);
+                if (!raw) return null;
+                const item = JSON.parse(raw);
+                if (Date.now() - item.timestamp > CACHE_TTL) {
+                    localStorage.removeItem(CACHE_PREFIX + key);
+                    return null;
+                }
+                return item.data;
+            } catch (e) { return null; }
+        }
+
+        function setCache(key, data, source) {
+            try {
+                localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({
+                    data, source: source || 'unknown', timestamp: Date.now()
+                }));
+            } catch (e) {}
+        }
+
+        function getCachedSource(key) {
+            try {
+                const raw = localStorage.getItem(CACHE_PREFIX + key);
+                if (!raw) return null;
+                const item = JSON.parse(raw);
+                return item.source || null;
+            } catch (e) { return null; }
+        }
+
+        function clearCache() {
+            Object.keys(localStorage)
+                .filter(k => k.startsWith('neon_exchange_'))
+                .forEach(k => localStorage.removeItem(k));
+        }
+
+        // ============================================
+        // ИНИЦИАЛИЗАЦИЯ
+        // ============================================
+
+        const tg = window.Telegram?.WebApp;
+        if (tg) { tg.ready(); tg.expand(); }
+
+        function updateDate() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('ru-RU', options);
+        }
+
+        // ============================================
+        // ИСТОЧНИКИ — РОССИЯ
+        // ============================================
+
+        async function fetchRURates() {
+            const cached = getCached('rates_RUB');
+            if (cached) return cached;
+
+            let result = await tryCbrXmlDaily();
+            if (result && Object.keys(result.rates).length > 0) {
+                setCache('rates_RUB', result.rates, result.source);
+                return result.rates;
+            }
+
+            result = await tryAllRatesToday();
+            if (result && Object.keys(result.rates).length > 0) {
+                setCache('rates_RUB', result.rates, result.source);
+                return result.rates;
+            }
+
+            result = await tryKursRublya();
+            if (result && Object.keys(result.rates).length > 0) {
+                setCache('rates_RUB', result.rates, result.source);
+                return result.rates;
+            }
+
+            result = await tryCbrXml();
+            if (result && Object.keys(result.rates).length > 0) {
+                setCache('rates_RUB', result.rates, result.source);
+                return result.rates;
+            }
+
+            return buildFallbackRates('RUB');
+        }
+
+        async function tryCbrXmlDaily() {
+            try {
+                const response = await fetchWithTimeout('https://www.cbr-xml-daily.ru/daily_json.js', {}, 6000);
+                if (!response.ok) return null;
+                const data = await response.json();
+                const rates = parseCbrJson(data);
+                return rates ? { rates, source: 'ЦБ РФ' } : null;
+            } catch (error) {
+                console.warn('cbr-xml-daily.ru недоступен:', error.message);
+                return null;
+            }
+        }
+
+        async function tryAllRatesToday() {
+            try {
+                const headers = {};
+                if (API_KEYS.ALLRATESTODAY && API_KEYS.ALLRATESTODAY !== 'ВАШ_КЛЮЧ_ALLRATESTODAY') {
+                    headers['Authorization'] = `Bearer ${API_KEYS.ALLRATESTODAY}`;
+                }
+
+                const response = await fetchWithTimeout(
+                    'https://allratestoday.com/api/v1/central-bank/cbr/latest',
+                    { headers }, 6000
+                );
+                if (!response.ok) return null;
+                const data = await response.json();
+                if (!data || !Array.isArray(data.rates)) return null;
+
+                const rates = {};
+                const targets = ['USD', 'EUR', 'CNY', 'UAH', 'GBP', 'JPY', 'CHF', 'KZT'];
+
+                for (const item of data.rates) {
+                    const code = (item.currency || '').toUpperCase();
+                    if (!targets.includes(code)) continue;
+                    const rubPerUnit = parseFloat(item.rate);
+                    if (!rubPerUnit || rubPerUnit <= 0) continue;
+                    rates[code] = {
+                        buy: rubPerUnit * 0.995,
+                        sell: rubPerUnit * 1.005,
+                        mid: rubPerUnit
+                    };
+                }
+                return Object.keys(rates).length > 0 ? { rates, source: 'AllRatesToday' } : null;
+            } catch (error) {
+                console.warn('AllRatesToday недоступен:', error.message);
+                return null;
+            }
+        }
+
+        async function tryKursRublya() {
+            try {
+                const response = await fetchWithTimeout(
+                    'https://kurs-rublya.ru/api/v1/rates/latest/',
+                    { headers: { 'Accept': 'application/json' } }, 6000
+                );
+                if (!response.ok) return null;
+                const data = await response.json();
+                const items = Array.isArray(data) ? data : (data.rates || data.data || []);
+                if (items.length === 0) return null;
+
+                const rates = {};
+                const targets = ['USD', 'EUR', 'CNY', 'UAH', 'GBP', 'JPY', 'CHF', 'KZT'];
+
+                for (const item of items) {
+                    const code = (item.code || item.currency || item.charCode || '').toUpperCase();
+                    if (!targets.includes(code)) continue;
+                    const rubPerUnit = parseFloat(item.ratePerUnit || item.value || item.rate);
+                    if (!rubPerUnit || rubPerUnit <= 0) continue;
+                    rates[code] = {
+                        buy: rubPerUnit * 0.995,
+                        sell: rubPerUnit * 1.005,
+                        mid: rubPerUnit
+                    };
+                }
+                return Object.keys(rates).length > 0 ? { rates, source: 'KursRublya' } : null;
+            } catch (error) {
+                console.warn('KursRublya недоступен:', error.message);
+                return null;
+            }
+        }
+
+        async function tryCbrXml() {
+            try {
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.cbr.ru/scripts/XML_daily.asp')}`;
+                const response = await fetchWithTimeout(proxyUrl, {}, 7000);
+                if (!response.ok) return null;
+                const xmlText = await response.text();
+                return parseCbrXml(xmlText);
+            } catch (error) {
+                console.warn('cbr.ru XML недоступен:', error.message);
+                return null;
+            }
+        }
+
+        function parseCbrJson(data) {
+            const targets = ['USD', 'EUR', 'CNY', 'UAH', 'GBP', 'JPY', 'CHF', 'KZT'];
+            const rates = {};
+
+            for (const code of targets) {
+                if (data.Valute && data.Valute[code]) {
+                    const currency = data.Valute[code];
+                    const rubPerUnit = currency.Value / currency.Nominal;
+                    if (!rubPerUnit || rubPerUnit <= 0) continue;
+                    rates[code] = {
+                        buy: rubPerUnit * 0.995,
+                        sell: rubPerUnit * 1.005,
+                        mid: rubPerUnit
+                    };
+                }
+            }
+            return Object.keys(rates).length > 0 ? rates : null;
+        }
+
+        function parseCbrXml(xmlText) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                const valutes = xmlDoc.querySelectorAll('Valute');
+
+                const targets = ['USD', 'EUR', 'CNY', 'UAH', 'GBP', 'JPY', 'CHF', 'KZT'];
+                const rates = {};
+
+                valutes.forEach(valute => {
+                    const code = valute.querySelector('CharCode')?.textContent;
+                    if (!targets.includes(code)) return;
+                    const nominal = parseFloat(valute.querySelector('Nominal')?.textContent) || 1;
+                    const value = parseFloat(valute.querySelector('Value')?.textContent?.replace(',', '.'));
+                    if (!value || value <= 0) return;
+                    const rubPerUnit = value / nominal;
+                    rates[code] = {
+                        buy: rubPerUnit * 0.995,
+                        sell: rubPerUnit * 1.005,
+                        mid: rubPerUnit
+                    };
+                });
+
+                return Object.keys(rates).length > 0 ? { rates, source: 'ЦБ РФ (XML)' } : null;
+            } catch (e) {
+                console.warn('Ошибка парсинга XML:', e.message);
+                return null;
+            }
+        }
+
+        // ============================================
+        // ИСТОЧНИКИ — УКРАИНА
+        // Оптимизация: Monobank рендерится сразу, RUB догружается в фоне
+        // ============================================
+
+        async function fetchUARates() {
+            const cached = getCached('rates_UAH');
+            if (cached) return cached;
+
+            // 1. Быстрый запрос к Monobank
+            let rates = await tryMonobank();
+
+            if (rates && Object.keys(rates).length > 0) {
+                setCache('rates_UAH', rates, 'Monobank');
+
+                // 2. RUB догружаем АСИНХРОННО — не блокируем UI
+                if (!rates['RUB']) {
+                    ensureRUBAsync(rates);
+                }
+                return rates;
+            }
+
+            // 3. Если Monobank не ответил — НБУ через прокси
+            rates = await tryNBUViaProxy();
+            if (rates && Object.keys(rates).length > 0) {
+                setCache('rates_UAH', rates, 'НБУ');
+                return rates;
+            }
+
+            // 4. Последний резерв — USD-таблица
+            return buildFallbackRates('UAH');
+        }
+
+        // Асинхронная догрузка RUB — обновляет только карточку RUB
+        async function ensureRUBAsync(rates) {
+            try {
+                const rub = await tryNBUViaProxy();
+                if (!rub || !rub['RUB']) return;
+
+                rates['RUB'] = rub['RUB'];
+                setCache('rates_UAH', rates, 'Monobank + НБУ');
+
+                // Обновляем только карточку RUB, если Украина сейчас открыта
+                if (state.selectedCountry.baseCurrency !== 'UAH') return;
+
+                state.rates['RUB'] = rub['RUB'];
+
+                const rubCard = document.querySelector('.currency-pair[data-pair="UAH-RUB"]');
+                if (!rubCard) {
+                    // Карточки RUB ещё нет — перерисовываем полностью
+                    const container = document.getElementById('pairsContainer');
+                    const pairCurrencies = PAIR_CURRENCIES['UAH'] || [];
+                    let html = '';
+                    pairCurrencies.forEach((foreignCurrency) => {
+                        if (!rates[foreignCurrency]) return;
+                        html += renderCard(`UAH-${foreignCurrency}`, rates[foreignCurrency], foreignCurrency, 'UAH');
+                    });
+                    container.innerHTML = html;
+                    initConverters();
+                } else {
+                    // Карточка есть — обновляем её целиком
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = renderCard('UAH-RUB', rub['RUB'], 'RUB', 'UAH').trim();
+                    const newCard = wrapper.firstChild;
+                    rubCard.parentNode.replaceChild(newCard, rubCard);
+                    // Инициализируем конвертер этой карточки
+                    const input = newCard.querySelector('.converter-input');
+                    if (input) {
+                        input.addEventListener('input', (e) => {
+                            state.pairAmounts['UAH-RUB'] = e.target.value;
+                            updateConverter('UAH-RUB');
+                        });
+                        updateConverter('UAH-RUB');
+                    }
+                }
+                console.log('✓ RUB догружен в фоне');
+            } catch (e) {
+                console.warn('Не удалось догрузить RUB в фоне:', e.message);
+            }
+        }
+
+        async function tryMonobank() {
+            try {
+                const response = await fetchWithTimeout('https://api.monobank.ua/bank/currency', {}, 5000);
+                if (!response.ok) return null;
+                const data = await response.json();
+                if (!Array.isArray(data)) return null;
+
+                const rates = {};
+                const codeMap = { 840: 'USD', 978: 'EUR', 826: 'GBP', 392: 'JPY', 756: 'CHF', 156: 'CNY', 643: 'RUB', 980: 'UAH', 985: 'PLN' };
+
+                for (const item of data) {
+                    const codeA = codeMap[item.currencyCodeA];
+                    const codeB = codeMap[item.currencyCodeB];
+                    if (!codeA || !codeB) continue;
+                    if (codeB !== 'UAH' || codeA === 'UAH') continue;
+
+                    const buy = item.rateBuy || item.rateCross || 0;
+                    const sell = item.rateSell || item.rateCross || 0;
+                    if (!buy || !sell || buy <= 0 || sell <= 0) continue;
+
+                    rates[codeA] = { buy, sell, mid: (buy + sell) / 2 };
+                }
+                return Object.keys(rates).length > 0 ? rates : null;
+            } catch (e) {
+                console.warn('Monobank недоступен:', e.message);
+                return null;
+            }
+        }
+
+        // НБУ через два прокси (allorigins + corsproxy.io)
+        async function tryNBUViaProxy() {
+            const nbuUrl = 'https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json';
+
+            const proxies = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(nbuUrl)}`,
+                `https://corsproxy.io/?url=${encodeURIComponent(nbuUrl)}`
+            ];
+
+            for (const proxyUrl of proxies) {
+                try {
+                    const response = await fetchWithTimeout(proxyUrl, {}, 5000);
+                    if (!response.ok) continue;
+                    const data = await response.json();
+                    if (!Array.isArray(data)) continue;
+
+                    const rates = {};
+                    const targetCodes = ['USD', 'EUR', 'PLN', 'GBP', 'JPY', 'CHF', 'CNY', 'RUB'];
+                    const spread = 0.005;
+
+                    for (const item of data) {
+                        const code = item.cc;
+                        if (!targetCodes.includes(code)) continue;
+                        const unit = parseFloat(item.unit) || 1;
+                        const uahPerUnit = parseFloat(item.rate) / unit;
+                        if (!uahPerUnit || uahPerUnit <= 0) continue;
+                        rates[code] = {
+                            buy: uahPerUnit * (1 - spread),
+                            sell: uahPerUnit * (1 + spread),
+                            mid: uahPerUnit
+                        };
+                    }
+                    if (Object.keys(rates).length > 0) return rates;
+                } catch (e) {
+                    // молча пробуем следующий прокси
+                }
+            }
+            return null;
+        }
+
+        // ============================================
+        // ИСТОЧНИКИ — ОСТАЛЬНЫЕ
+        // ============================================
+
+        async function fetchExchangeRateRates(baseCurrency) {
+            const cacheKey = `rates_${baseCurrency}`;
+            const cached = getCached(cacheKey);
+            if (cached) return cached;
+
+            if (!API_KEYS.EXCHANGERATE || API_KEYS.EXCHANGERATE === 'ВАШ_КЛЮЧ_EXCHANGERATE') {
+                return buildFallbackRates(baseCurrency);
+            }
+
+            try {
+                const response = await fetchWithTimeout(
+                    `https://v6.exchangerate-api.com/v6/${API_KEYS.EXCHANGERATE}/latest/${baseCurrency}`,
+                    {}, 7000
+                );
+                if (!response.ok) throw new Error('API error');
+                const data = await response.json();
+                if (data.result === 'error' || !data.conversion_rates) throw new Error('bad data');
+
+                const rates = {};
+                for (const [code, rate] of Object.entries(data.conversion_rates)) {
+                    if (!rate || rate <= 0) continue;
+                    const mid = 1 / rate;
+                    rates[code] = {
+                        buy: mid * 0.995,
+                        sell: mid * 1.005,
+                        mid: mid
+                    };
+                }
+                if (Object.keys(rates).length === 0) throw new Error('empty');
+                setCache(cacheKey, rates, 'ExchangeRate-API');
+                return rates;
+            } catch (error) {
+                console.warn('ExchangeRate-API недоступен:', error.message);
+                return buildFallbackRates(baseCurrency);
+            }
+        }
+
+        async function fetchRates(baseCurrency) {
+            try {
+                if (baseCurrency === 'RUB') return await fetchRURates();
+                if (baseCurrency === 'UAH') return await fetchUARates();
+                return await fetchExchangeRateRates(baseCurrency);
+            } catch (e) {
+                console.error('Критическая ошибка fetchRates:', e);
+                return buildFallbackRates(baseCurrency);
+            }
+        }
+
+        function buildFallbackRates(baseCurrency) {
+            const baseUsd = USD_PER_UNIT[baseCurrency];
+            if (!baseUsd) return {};
+
+            const result = {};
+            const targets = PAIR_CURRENCIES[baseCurrency] || [];
+            for (const code of targets) {
+                const foreignUsd = USD_PER_UNIT[code];
+                if (!foreignUsd) continue;
+                const mid = foreignUsd / baseUsd;
+                result[code] = {
+                    buy: mid * 0.995,
+                    sell: mid * 1.005,
+                    mid: mid
+                };
+            }
+            return result;
+        }
+
+        // ============================================
+        // ОТОБРАЖЕНИЕ
+        // ============================================
+
+        function renderRateBlock(rateData, type, foreignCode) {
+            const rate = type === 'buy' ? rateData.buy : rateData.sell;
+            const mid = rateData.mid || ((rateData.buy + rateData.sell) / 2) || rate;
+            const change = rate - mid;
+            const isUp = change >= 0;
+            const formatted = rate < 1 ? rate.toFixed(4) : rate.toFixed(2);
+            const changeFormatted = Math.abs(change) < 1
+                ? Math.abs(change).toFixed(4)
+                : Math.abs(change).toFixed(2);
+            const arrow = isUp ? '▲' : '▼';
+            const cls = isUp ? 'up' : 'down';
+            const label = type === 'buy' ? 'Покупка' : 'Продажа';
+
+            return `
+                <div class="currency-block">
+                    <span class="rate-label-small">${label}</span>
+                    <span class="currency-name">${CURRENCY_NAMES[foreignCode] || foreignCode}</span>
+                    <span class="currency-value">${formatted}</span>
+                    <span class="currency-code-small">${foreignCode}</span>
+                    <span class="change-indicator ${cls}">
+                        <span class="arrow">${arrow}</span>
+                        <span>${changeFormatted}</span>
+                    </span>
+                </div>
+            `;
+        }
+
+        function renderCard(pairKey, rateData, foreignCurrency, baseCurrency) {
+            const mode = state.pairRateTypes[pairKey] || 'buy';
+            const firstType = mode === 'buy' ? 'buy' : 'sell';
+            const secondType = mode === 'buy' ? 'sell' : 'buy';
+            const inputValue = state.pairAmounts[pairKey] !== undefined
+                ? state.pairAmounts[pairKey]
+                : 100;
+
+            const source = getCachedSource(`rates_${baseCurrency}`) || '';
+
+            return `
+                <div class="currency-pair" data-pair="${pairKey}">
+                    <div class="pair-header">
+                        <span class="pair-label">${foreignCurrency}/${baseCurrency}</span>
+                        ${source ? `<span class="pair-source">${source}</span>` : ''}
+                    </div>
+                    <div class="pair-main" data-rate-blocks>
+                        ${renderRateBlock(rateData, firstType, foreignCurrency)}
+                        <div class="divider"></div>
+                        ${renderRateBlock(rateData, secondType, foreignCurrency)}
+                    </div>
+                    <div class="converter">
+                        <input type="number"
+                               class="converter-input"
+                               data-pair="${pairKey}"
+                               placeholder="Сумма"
+                               min="0"
+                               step="any"
+                               value="${inputValue}">
+                        <button type="button"
+                                class="converter-mode ${mode}"
+                                data-pair="${pairKey}"
+                                onclick="toggleRateMode(event, '${pairKey}')">
+                            ${mode === 'buy' ? 'Покупка' : 'Продажа'} ⇄
+                        </button>
+                        <div class="converter-result" data-pair="${pairKey}">—</div>
+                    </div>
+                    <div class="converter-hint">Нажмите на кнопку в конвертере, чтобы поменять покупку и продажу местами</div>
+                </div>
+            `;
+        }
+
+        function initConverters() {
+            document.querySelectorAll('.converter-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const pair = e.target.dataset.pair;
+                    state.pairAmounts[pair] = e.target.value;
+                    updateConverter(pair);
+                });
+                updateConverter(input.dataset.pair);
+            });
+        }
+
+        async function renderPairs() {
+            const container = document.getElementById('pairsContainer');
+            const baseCurrency = state.selectedCountry.baseCurrency;
+
+            const renderId = ++currentRenderId;
+
+            container.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    Загрузка курсов...
+                </div>
+            `;
+
+            let rates;
+            try {
+                rates = await fetchRates(baseCurrency);
+            } catch (e) {
+                console.error('Ошибка рендера, использую резерв:', e);
+                rates = buildFallbackRates(baseCurrency);
+            }
+
+            if (renderId !== currentRenderId) return;
+
+            state.rates = rates;
+
+            const pairCurrencies = PAIR_CURRENCIES[baseCurrency] || ['USD', 'EUR', 'GBP', 'JPY'];
+            let html = '';
+
+            pairCurrencies.forEach((foreignCurrency) => {
+                if (!rates[foreignCurrency]) return;
+                const rateData = rates[foreignCurrency];
+                const pairKey = `${baseCurrency}-${foreignCurrency}`;
+                html += renderCard(pairKey, rateData, foreignCurrency, baseCurrency);
+            });
+
+            if (html === '') {
+                html = '<div class="loading">Нет доступных курсов</div>';
+            }
+
+            container.innerHTML = html;
+            initConverters();
+        }
+
+        function toggleRateMode(event, pairKey) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const current = state.pairRateTypes[pairKey] || 'buy';
+            state.pairRateTypes[pairKey] = current === 'buy' ? 'sell' : 'buy';
+            updateCard(pairKey);
+        }
+
+        function updateCard(pairKey) {
+            const card = document.querySelector(`.currency-pair[data-pair="${pairKey}"]`);
+            if (!card) return;
+
+            const [base, foreign] = pairKey.split('-');
+            const rateData = state.rates[foreign];
+            if (!rateData) return;
+
+            const mode = state.pairRateTypes[pairKey] || 'buy';
+
+            const btn = card.querySelector('.converter-mode');
+            if (btn) {
+                btn.classList.toggle('sell', mode === 'sell');
+                btn.textContent = `${mode === 'buy' ? 'Покупка' : 'Продажа'} ⇄`;
+            }
+
+            const blocksContainer = card.querySelector('[data-rate-blocks]');
+            if (blocksContainer) {
+                const firstType = mode === 'buy' ? 'buy' : 'sell';
+                const secondType = mode === 'buy' ? 'sell' : 'buy';
+                blocksContainer.innerHTML = `
+                    ${renderRateBlock(rateData, firstType, foreign)}
+                    <div class="divider"></div>
+                    ${renderRateBlock(rateData, secondType, foreign)}
+                `;
+            }
+
+            updateConverter(pairKey);
+        }
+
+        function updateConverter(pairKey) {
+            const input = document.querySelector(`.converter-input[data-pair="${pairKey}"]`);
+            const result = document.querySelector(`.converter-result[data-pair="${pairKey}"]`);
+            if (!input || !result) return;
+
+            const [base, foreign] = pairKey.split('-');
+            const rateData = state.rates[foreign];
+            if (!rateData) { result.textContent = '—'; return; }
+
+            const mode = state.pairRateTypes[pairKey] || 'buy';
+            const amount = parseFloat(input.value) || 0;
+            const rate = mode === 'buy' ? rateData.buy : rateData.sell;
+
+            if (!rate || rate <= 0) { result.textContent = '—'; return; }
+
+            const converted = amount * rate;
+            const formatted = converted < 1 ? converted.toFixed(4) : converted.toFixed(2);
+            result.textContent = formatted;
+        }
+
+        // ============================================
+        // ВЗАИМОДЕЙСТВИЕ
+        // ============================================
+
+        function selectCountry(country) {
+            state.selectedCountry = country;
+            state.pairRateTypes = {};
+            state.pairAmounts = {};
+            document.getElementById('selectedCountryName').textContent = country.name;
+            closeCountryList();
+            renderPairs();
+        }
+
+        function toggleCountryList() {
+            const list = document.getElementById('countryList');
+            const selector = document.getElementById('countrySelector');
+            list.classList.toggle('show');
+            selector.classList.toggle('open');
+        }
+
+        function closeCountryList() {
+            document.getElementById('countryList').classList.remove('show');
+            document.getElementById('countrySelector').classList.remove('open');
+        }
+
+        function renderCountryList() {
+            const list = document.getElementById('countryList');
+            list.innerHTML = COUNTRIES.map(country => `
+                <div class="country-item" data-code="${country.code}">
+                    <div class="country-info">
+                        <span class="country-flag">${country.flag}</span>
+                        <div>
+                            <div style="font-size: 14px; font-weight: 600;">${country.name}</div>
+                            <div class="country-code">${country.code} • ${country.currency}</div>
+                        </div>
+                    </div>
+                    <span class="country-currency">${country.currency}</span>
+                </div>
+            `).join('');
+
+            list.querySelectorAll('.country-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const code = item.dataset.code;
+                    const country = COUNTRIES.find(c => c.code === code);
+                    if (country) selectCountry(country);
+                });
+            });
+        }
+
+        // ============================================
+        // ЗАПУСК
+        // ============================================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDate();
+            renderCountryList();
+            renderPairs();
+
+            document.getElementById('countrySelector').addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleCountryList();
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#countrySelector') && !e.target.closest('#countryList')) {
+                    closeCountryList();
+                }
+            });
+
+            setInterval(updateDate, 60000);
+
+            setInterval(() => {
+                const ae = document.activeElement;
+                if (ae && ae.classList && ae.classList.contains('converter-input')) return;
+                clearCache();
+                renderPairs();
+            }, 300000);
+        });
+
+        window.selectCountry = selectCountry;
+        window.toggleRateMode = toggleRateMode;
+        window.clearCache = clearCache;
+    </script>
+</body>
+</html>
